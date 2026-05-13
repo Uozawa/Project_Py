@@ -1,5 +1,12 @@
-"""Convert the paint industry research Markdown to a Japanese-capable PDF."""
+"""Convert a Markdown file to a Japanese-capable PDF.
+
+Usage:
+    python3 scripts/build_pdf.py                       # default report
+    python3 scripts/build_pdf.py <input.md>            # auto output: same stem + .pdf
+    python3 scripts/build_pdf.py <input.md> <out.pdf>  # explicit output
+"""
 import re
+import sys
 from pathlib import Path
 
 from reportlab.lib.colors import HexColor, black, white
@@ -21,8 +28,7 @@ from reportlab.platypus import (
 )
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "research" / "paint-industry-demand-side.md"
-DST = ROOT / "research" / "paint-industry-demand-side.pdf"
+DEFAULT_SRC = ROOT / "research" / "paint-industry-demand-side.md"
 
 FONT_REGULAR = "/usr/share/fonts/opentype/ipafont-gothic/ipag.ttf"
 FONT_PROPORTIONAL = "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
@@ -231,22 +237,51 @@ def header_footer(canvas, doc):
     canvas.restoreState()
 
 
+def extract_title(md_text: str) -> str:
+    for line in md_text.splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return "Project_Py Report"
+
+
+def make_header_footer(title: str):
+    def _hf(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("JP", 8)
+        canvas.setFillColor(HexColor("#718096"))
+        canvas.drawString(18 * mm, 10 * mm, title)
+        canvas.drawRightString(A4[0] - 18 * mm, 10 * mm, f"Page {doc.page}")
+        canvas.restoreState()
+    return _hf
+
+
 def main():
-    md_text = SRC.read_text(encoding="utf-8")
+    if len(sys.argv) >= 2:
+        src = Path(sys.argv[1])
+    else:
+        src = DEFAULT_SRC
+    if len(sys.argv) >= 3:
+        dst = Path(sys.argv[2])
+    else:
+        dst = src.with_suffix(".pdf")
+
+    md_text = src.read_text(encoding="utf-8")
+    title = extract_title(md_text)
     flowables = render(md_text)
 
     doc = SimpleDocTemplate(
-        str(DST),
+        str(dst),
         pagesize=A4,
         leftMargin=18 * mm,
         rightMargin=18 * mm,
         topMargin=18 * mm,
         bottomMargin=18 * mm,
-        title="塗料業界 調査レポート（需要側フォーカス）",
+        title=title,
         author="Project_Py",
     )
-    doc.build(flowables, onFirstPage=header_footer, onLaterPages=header_footer)
-    print(f"Wrote: {DST}")
+    hf = make_header_footer(title)
+    doc.build(flowables, onFirstPage=hf, onLaterPages=hf)
+    print(f"Wrote: {dst}")
 
 
 if __name__ == "__main__":
