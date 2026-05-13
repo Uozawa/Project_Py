@@ -6,6 +6,7 @@
 """
 
 import re
+import sys
 from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
@@ -33,8 +34,7 @@ FONT_PROP = "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
 pdfmetrics.registerFont(TTFont("IPAGothic", FONT_REG))
 pdfmetrics.registerFont(TTFont("IPAPGothic", FONT_PROP))
 
-SRC = Path(__file__).parent / "塗料業界_業界構造.md"
-OUT = Path(__file__).parent / "塗料業界_業界構造.pdf"
+DEFAULT_SRC = Path(__file__).parent / "塗料業界_業界構造.md"
 
 
 # ---------- スタイル定義 ----------
@@ -217,34 +217,46 @@ def parse_markdown(text):
     return flow
 
 
-def header_footer(canvas, doc):
-    canvas.saveState()
-    canvas.setFont("IPAPGothic", 8)
-    canvas.setFillColor(colors.HexColor("#888888"))
-    canvas.drawString(15 * mm, 10 * mm, "塗料業界 全体構造ガイド")
-    canvas.drawRightString(A4[0] - 15 * mm, 10 * mm, f"- {doc.page} -")
-    canvas.setStrokeColor(colors.HexColor("#bcc3d4"))
-    canvas.line(15 * mm, 12 * mm, A4[0] - 15 * mm, 12 * mm)
-    canvas.restoreState()
+def make_header_footer(footer_title: str):
+    def header_footer(canvas, doc):
+        canvas.saveState()
+        canvas.setFont("IPAPGothic", 8)
+        canvas.setFillColor(colors.HexColor("#888888"))
+        canvas.drawString(15 * mm, 10 * mm, footer_title)
+        canvas.drawRightString(A4[0] - 15 * mm, 10 * mm, f"- {doc.page} -")
+        canvas.setStrokeColor(colors.HexColor("#bcc3d4"))
+        canvas.line(15 * mm, 12 * mm, A4[0] - 15 * mm, 12 * mm)
+        canvas.restoreState()
+    return header_footer
 
 
 def main():
-    text = SRC.read_text(encoding="utf-8")
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_SRC
+    out = src.with_suffix(".pdf")
+    text = src.read_text(encoding="utf-8")
     flow = parse_markdown(text)
 
+    # 先頭の # 見出しからフッタ用タイトルを抽出
+    title = src.stem
+    for line in text.splitlines():
+        m = re.match(r"^#\s+(.*)$", line)
+        if m:
+            title = m.group(1)
+            break
+
     doc = BaseDocTemplate(
-        str(OUT), pagesize=A4,
+        str(out), pagesize=A4,
         leftMargin=15 * mm, rightMargin=15 * mm,
         topMargin=15 * mm, bottomMargin=18 * mm,
-        title="塗料業界 全体構造ガイド",
+        title=title,
         author="Industry Briefing",
     )
     frame = Frame(doc.leftMargin, doc.bottomMargin,
                   doc.width, doc.height, id="normal")
     doc.addPageTemplates([PageTemplate(id="all", frames=frame,
-                                       onPage=header_footer)])
+                                       onPage=make_header_footer(title))])
     doc.build(flow)
-    print(f"OK: {OUT}  ({OUT.stat().st_size:,} bytes)")
+    print(f"OK: {out}  ({out.stat().st_size:,} bytes)")
 
 
 if __name__ == "__main__":
