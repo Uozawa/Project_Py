@@ -716,7 +716,8 @@ def make_summary_sheet(wb):
         ("③-3", "粉体塗料 IN/OUT",       "家電・自動車部品。VOC ゼロ"),
         ("③-4", "電着塗料 IN/OUT",       "自動車車体下塗。タンクローリー出荷"),
         ("③-5", "UV硬化塗料 IN/OUT",     "木工・印刷・プラ。遮光下で製造"),
-        ("出典", "参考文献",             "JPMA・環境省・経産省・装置メーカー資料 等"),
+        ("用語集", "専門用語の解説",     "原材料・製造プロセス・製品・品質・物流・規制・環境 のカテゴリ別 60+ 用語"),
+        ("典拠", "記述の根拠",           "Excel 各記述に対する 法令 / 公的資料 / 業界資料 / 装置メーカー 等の典拠マッピング"),
     ]
     write_cell(ws, 6, 2, "番号", font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
     write_cell(ws, 6, 3, "シート名", font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
@@ -927,74 +928,454 @@ def make_inout_sheet(wb, product_name, idx):
 
 
 def make_sources_sheet(wb):
-    ws = wb.create_sheet("出典_参考文献")
-    setup_columns(ws, [3, 6, 50, 55])
+    """[非推奨] 旧版の出典一覧シート。現行では make_citations_sheet を使用。"""
+    return None
 
-    ws.merge_cells("B2:D2")
-    write_cell(ws, 2, 2, "出典・参考文献 (Web 整合確認に使用)",
+
+# ────────────────────────────────────────────────────────────────────
+# 用語集 (GLOSSARY)
+# ────────────────────────────────────────────────────────────────────
+
+GLOSSARY = [
+    # (カテゴリ, 用語, 読み, 英語, 解説)
+    ("原材料", "樹脂 (バインダー)", "じゅし／-", "Resin / Binder",
+     "塗膜の骨格を形成する高分子成分。アクリル・エポキシ・ポリウレタン・アルキッド・フッ素・シリコーン等。塗料原価の最大費目。"),
+    ("原材料", "顔料", "がんりょう", "Pigment",
+     "塗料に着色と隠蔽性を与える微粒子。無機顔料 (TiO₂・酸化鉄等) と有機顔料 (アゾ・フタロシアニン等) に大別。"),
+    ("原材料", "酸化チタン (TiO₂)", "さんかちたん", "Titanium Dioxide",
+     "白色顔料の代表。塗料用顔料の 6 割超を占め、価格変動が塗料原価を大きく左右する。製法は塩素法と硫酸法。"),
+    ("原材料", "体質顔料", "たいしつがんりょう", "Extender Pigment",
+     "炭酸カルシウム・タルク・硫酸バリウム等の増量・物性調整用顔料。安価で耐久性・粘性向上に寄与。"),
+    ("原材料", "溶剤", "ようざい", "Solvent",
+     "樹脂を溶解・希釈し塗料に流動性を与える液体。トルエン・キシレン・MEK 等の有機溶剤と水。消防法第 4 類対象。"),
+    ("原材料", "添加剤", "てんかざい", "Additive",
+     "数 % の配合だが品質を決定する補助材。分散剤・消泡剤・レベリング剤・UV 吸収剤・防腐剤 等。BYK・Evonik 等が寡占。"),
+    ("原材料", "分散剤", "ぶんさんざい", "Dispersant",
+     "顔料を樹脂・溶剤中に均一分散させる界面活性剤系添加剤。塗料の色再現性・貯蔵安定性を担保。"),
+    ("原材料", "消泡剤", "しょうほうざい", "Defoamer / Antifoam",
+     "気泡を破壊・抑制する添加剤。シリコーン系・鉱油系・アクリル系がある。"),
+    ("原材料", "レベリング剤", "-", "Leveling Agent",
+     "塗膜表面の平滑性を向上させる添加剤。シリコーン系・アクリル系。"),
+    ("原材料", "HALS / UV吸収剤", "-", "Hindered Amine Light Stabilizer",
+     "紫外線によるラジカル劣化を捕捉するアミン系添加剤。屋外用途の耐候性向上に必須。BASF Tinuvin が代表。"),
+    ("原材料", "硬化剤", "こうかざい", "Curing Agent / Crosslinker",
+     "樹脂と反応して三次元架橋を起こさせる薬剤。イソシアネート・アミン・ジシアンジアミド・TGIC 等。"),
+    ("原材料", "ブロックイソシアネート", "-", "Blocked Isocyanate",
+     "イソシアネート基をブロック剤で保護し、加熱で再活性化させる硬化剤。電着塗料・粉体塗料で使用。"),
+    ("原材料", "光開始剤", "ひかりかいしざい", "Photoinitiator",
+     "UV 照射でラジカルを発生し UV 塗料を瞬時に硬化させる。Irgacure (BASF, 旧 Ciba) が代表。"),
+    ("原材料", "TGIC", "-", "Triglycidyl Isocyanurate",
+     "ポリエステル粉体塗料の代表的な硬化剤。耐候性に優れる。"),
+    ("原材料", "防腐剤", "ぼうふざい", "Biocide / Preservative",
+     "水性塗料に必須。イソチアゾリン系等が代表。容器内での細菌・カビ繁殖を防止。Lonza・Troy 等。"),
+
+    ("製造プロセス", "ミルベース", "-", "Mill Base",
+     "顔料を樹脂・溶剤中に高濃度で微分散させた中間製品。塗料製造の根幹工程の産物。"),
+    ("製造プロセス", "レットダウン", "-", "Let-down / Thinning",
+     "ミルベースに残りの樹脂・溶剤・添加剤を加えて最終塗料に調合する工程。「調合工程」とも呼ぶ。"),
+    ("製造プロセス", "前練", "まえねり", "Pre-mixing",
+     "本格的な分散の前に行う粗混合。ディスパーザー等の高速撹拌で実施。"),
+    ("製造プロセス", "分散・練肉", "ぶんさん・れんにく", "Dispersion / Milling",
+     "顔料凝集体を nm 単位まで微粒化する工程。ビーズミル・サンドミル・三本ロール等を使用。"),
+    ("製造プロセス", "ディスパーザー", "-", "Disperser / High-speed Mixer",
+     "高速回転羽根 (1,500〜3,000 rpm) で粗分散を行う装置。"),
+    ("製造プロセス", "ビーズミル", "-", "Bead Mill",
+     "0.3〜2 mm の媒体ビーズと共に高速循環し顔料を微粒化する装置。塗料製造の主力分散機。アシザワ・淺田鉄工 等。"),
+    ("製造プロセス", "サンドミル", "-", "Sand Mill",
+     "砂状メディアを使用する初期型分散機。ビーズミルの祖先にあたる。"),
+    ("製造プロセス", "三本ロール", "さんぼん-", "Three-roll Mill",
+     "3 本の回転ロール間で高粘度ペーストを擦り合わせて分散させる装置。高粘度系で使用。"),
+    ("製造プロセス", "調色", "ちょうしょく", "Tinting / Color Matching",
+     "目標色に合わせて着色剤を微量添加する工程。CCM や職人の目視で実施。"),
+    ("製造プロセス", "CCM", "-", "Computer Color Matching",
+     "分光測色計とコンピュータで自動的に色配合を提案する技術。再調色回数を削減。"),
+    ("製造プロセス", "ろ過", "ろか", "Filtration",
+     "凝集物・異物を除去する工程。バッグフィルタ・カートリッジ式で目開き 50〜200 μm。"),
+    ("製造プロセス", "押出混練", "おしだしこんれん", "Extrusion / Melt Compounding",
+     "粉体塗料製造の中核工程。二軸エクストルーダーで樹脂を溶融させ顔料を分散。"),
+    ("製造プロセス", "エクストルーダー", "-", "Extruder",
+     "原料を加熱・混練しながら押し出す装置。粉体塗料製造で必須。"),
+    ("製造プロセス", "分級", "ぶんきゅう", "Classification / Sieving",
+     "粉砕粉を粒径別に分けて規格内のものを製品とする工程。気流分級機・篩を使用。"),
+    ("製造プロセス", "バッチ生産", "-", "Batch Production",
+     "一定量を釜単位で生産する方式。塗料製造の標準形態。1 バッチ 数百 kg〜数十 t。"),
+
+    ("製品", "溶剤系塗料", "ようざいけい-", "Solvent-borne Paint",
+     "有機溶剤を媒体とする塗料。乾燥が早く塗膜性能高いが VOC 排出大。消防法対象。"),
+    ("製品", "水性塗料", "すいせい-", "Water-borne Paint",
+     "水を媒体とする塗料。VOC 削減型。凍結 NG・防腐剤必要。建築用が中心。"),
+    ("製品", "粉体塗料", "ふんたい-", "Powder Coating",
+     "溶剤を全く含まない粉末塗料。回収再利用可能、塗着効率ほぼ 100%。家電・自動車部品・建材で増勢。"),
+    ("製品", "電着塗料", "でんちゃく-", "Electrodeposition (E-coat)",
+     "塗料を水中に分散し、電気泳動により素材表面に均一に析出させる塗料。自動車車体下塗の世界標準。"),
+    ("製品", "カチオン電着塗料", "-", "Cationic E-coat",
+     "アミン中和エポキシ樹脂を使用。自動車車体下塗で防錆性に優れる。"),
+    ("製品", "アニオン電着塗料", "-", "Anionic E-coat",
+     "酸中和ポリエステル/アクリル樹脂を使用。電子部品等。"),
+    ("製品", "UV 硬化塗料", "-", "UV-curable Coating",
+     "光開始剤を含有し、紫外線照射で瞬時に硬化する塗料。木工・印刷・プラ向け。遮光保管が必要。"),
+    ("製品", "ハイソリッド塗料", "-", "High-Solid Paint",
+     "固形分比率を高め、溶剤を減らした低 VOC 塗料。"),
+    ("製品", "2 液型塗料", "に-えきがた-", "Two-component (2K)",
+     "主剤と硬化剤を使用直前に混合する塗料。ポットライフ管理が必要。自動車補修・防食で多用。"),
+
+    ("品質", "ΔE / 色差", "デルタイー", "Color Difference",
+     "標準色と試料色の差を CIE L*a*b* 空間で表現した指標。塗料調色では ΔE < 0.8〜1.5 が合格目安。"),
+    ("品質", "隠蔽率", "いんぺいりつ", "Hiding Power",
+     "塗膜が下地を覆い隠す能力。白黒模様紙上に塗装して測定。"),
+    ("品質", "粘度", "ねんど", "Viscosity",
+     "流動性の指標。フォードカップ・ストーマー粘度計・B 型粘度計で測定。塗料の作業性に直結。"),
+    ("品質", "フォードカップ", "-", "Ford Cup",
+     "規定容量のカップから塗料が流出する時間で粘度を測定する簡易計器。"),
+    ("品質", "固形分", "こけいぶん", "Solid Content / NV",
+     "塗料中の不揮発成分の重量比率。塗膜形成に直接寄与する成分量。"),
+    ("品質", "ドライダウン現象", "-", "Dry-down Effect",
+     "水性塗料で乾燥前後で色味が変わる現象。調色時に乾燥色 (Dry) を参照する必要がある。"),
+    ("品質", "ゲル化時間", "-", "Gel Time",
+     "粉体塗料を加熱して流動性を失うまでの時間。硬化反応の活性度の指標。"),
+    ("品質", "MEQ", "-", "Milli-equivalents",
+     "電着塗料の中和度を示す。樹脂 100 g 当たりの中和剤当量。塗料管理の重要指標。"),
+    ("品質", "塗着効率", "とちゃくこうりつ", "Transfer Efficiency",
+     "吹付塗料のうち被塗物に付着した割合。粉体塗料は回収再利用で理論ほぼ 100% に到達可能。"),
+
+    ("物流・容器", "一斗缶", "いっとかん", "18L Can",
+     "塗料・油類の代表的な容器。容量 18 L、別名「石油缶」。"),
+    ("物流・容器", "IBC コンテナ", "-", "Intermediate Bulk Container",
+     "1,000 L 級の樹脂タンク。中間バルク容器とも。直販ルートで自動車 OEM 等に供給。"),
+    ("物流・容器", "フレコン", "-", "Flexible Container / FIBC",
+     "500〜1,000 kg の柔軟容器。粉体塗料・体質顔料の輸送に多用。"),
+    ("物流・容器", "タンクローリー", "-", "Tank Truck",
+     "液体一括輸送車両。電着塗料や OEM 直販で使用。"),
+    ("物流・容器", "VMI", "ヴイエムアイ", "Vendor Managed Inventory",
+     "サプライヤーが顧客の在庫を管理する方式。自動車 OEM 向け塗料で標準的。"),
+    ("物流・容器", "JIT", "ジット", "Just-In-Time",
+     "必要な時に必要な量を納入する方式。自動車塗装ラインで欠品ゼロが至上命題。"),
+
+    ("規制・安全", "消防法", "しょうぼうほう", "Fire Service Act (Japan)",
+     "塗料の主原料・製品 (引火性液体) を規制する日本の法律。第 4 類に分類。"),
+    ("規制・安全", "危険物第 4 類", "-", "Class 4 Hazardous Materials",
+     "引火性液体。第 1 石油類 (引火点 21℃未満)・第 2 石油類 (21〜70℃)・第 3 石油類 (70〜200℃) 等に細分。"),
+    ("規制・安全", "指定数量", "していすうりょう", "Designated Quantity",
+     "消防法で危険物の保管・取扱いに規制をかける基準量。倍数管理で倉庫構造が決まる。"),
+    ("規制・安全", "VOC", "ブイオーシー", "Volatile Organic Compounds",
+     "揮発性有機化合物。光化学スモッグの原因。大気汚染防止法で規制。"),
+    ("規制・安全", "PRTR", "ピーアールティーアール", "Pollutant Release and Transfer Register",
+     "化学物質排出移動量届出制度 (経産省・環境省)。塗料関連物質も対象。"),
+    ("規制・安全", "GHS", "ジーエイチエス", "Globally Harmonized System",
+     "化学品の分類・表示の世界共通システム。塗料缶にも GHS ピクトグラム表示が必要。"),
+    ("規制・安全", "REACH", "リーチ", "Registration, Evaluation, Authorisation of Chemicals",
+     "EU の化学品規制。塗料原料も登録対象。"),
+    ("規制・安全", "RoHS", "ローズ", "Restriction of Hazardous Substances",
+     "EU の有害物質使用制限指令。鉛・カドミウム等を制限。"),
+    ("規制・安全", "産業廃棄物", "-", "Industrial Waste",
+     "事業活動で発生する廃棄物。塗料関連は燃え殻・廃酸・廃アルカリ・廃油・廃プラ等に区分。"),
+    ("規制・安全", "特別管理産業廃棄物", "とくべつかんり-", "Specially Controlled Industrial Waste",
+     "爆発性・毒性・感染性等のある特に管理が必要な産廃。引火点 70℃未満の廃油 (廃シンナー) が該当。"),
+
+    ("環境・省エネ", "RTO", "アールティーオー", "Regenerative Thermal Oxidizer",
+     "蓄熱燃焼式 VOC 処理装置。排ガスを 700〜800℃で燃焼し VOC を CO₂・水に分解。"),
+    ("環境・省エネ", "活性炭吸着", "かっせいたんきゅうちゃく", "Activated Carbon Adsorption",
+     "活性炭で VOC を吸着除去する方法。低濃度に有効。"),
+    ("環境・省エネ", "Scope 1/2/3", "-", "GHG Protocol Scopes",
+     "Scope 1=自社直接排出、Scope 2=購入電力等、Scope 3=サプライチェーン上下流。塗料業は Scope 3 が圧倒的に大きい。"),
+    ("環境・省エネ", "UF (限外ろ過)", "-", "Ultrafiltration",
+     "膜分離技術。電着塗装ラインで回収洗浄水中の塗料分を濃縮・再利用する。"),
+    ("環境・省エネ", "ピギング", "-", "Pigging",
+     "配管内に円筒状のピグを通して残液を回収する技術。塗料の配管残ロス削減に有効。"),
+    ("環境・省エネ", "蒸留再生", "じょうりゅうさいせい", "Solvent Distillation / Recovery",
+     "廃シンナーを蒸留して再生溶剤として回収する技術。社内設置で処理コストを 1/3 程度に削減可能。"),
+]
+
+
+def make_glossary_sheet(wb):
+    ws = wb.create_sheet("用語集")
+    setup_columns(ws, [3, 14, 24, 12, 24, 60])
+
+    ws.merge_cells("B2:F2")
+    write_cell(ws, 2, 2, "用語集 (塗料製造で頻出する専門用語)",
                font=FONT_TITLE, fill=FILL_TITLE, align=ALIGN_CENTER, border=BORDER_BOX)
     ws.row_dimensions[2].height = 28
 
-    write_cell(ws, 4, 2, "No.", font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
-    write_cell(ws, 4, 3, "情報源", font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
-    write_cell(ws, 4, 4, "URL", font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
+    headers = ["No.", "カテゴリ", "用語", "読み", "英語表記", "解説"]
+    for i, h in enumerate(headers, start=2):
+        write_cell(ws, 4, i, h, font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
+    ws.row_dimensions[4].height = 22
 
-    sources = [
-        ("日本塗料工業会 (JPMA) VOC規制関連情報", "https://www.toryo.or.jp/jp/anzen/VOC/index.html"),
-        ("JPMA 塗料からのVOC排出実態推計のまとめ 2022年度", "https://www.toryo.or.jp/jp/book/voch2022.html"),
-        ("JPMA コーティング・ケア環境管理指標", "https://www.toryo.or.jp/jp/anzen/cc/03_feature.html"),
-        ("関東塗料工業組合 2022年度塗料VOC排出推計", "https://kantoko.com/blog/2024/04/90578/"),
-        ("庫本「塗料における分散」色材協会誌 (J-Stage)",
-         "https://www.jstage.jst.go.jp/article/shikizai1937/78/4/78_191/_pdf/-char/ja"),
-        ("塗料における最近の顔料分散とそのプロセス (J-Stage)",
-         "https://www.jstage.jst.go.jp/article/shikizai/87/6/87_204/_pdf"),
-        ("Mixing Tank 塗料製造の方法",
-         "https://www.mixing-tank.com/ja/blog/"),
-        ("JCT Machinery Paint Manufacturing Process",
-         "https://www.mixmachinery.com/news/paint-manufacturing-process-jct-machinery.html"),
-        ("アシザワ・ファインテック ビーズミルガイド", "https://ashizawa.com/guidance/05.html"),
-        ("関西ペイント R&D 高度顔料分散システム",
-         "https://asset.kansai.co.jp/uploads/rd/paint_study/pdf/143/04.pdf"),
-        ("サンノプコ 顔料分散解説",
-         "https://www.sannopco.co.jp/feature/pigment-dispersion/"),
-        ("ヒバラコーポレーション 粉体塗装", "https://kougyoutosou.com/technology/powder/"),
-        ("日鉄防食 粉体塗装", "https://acc.nipponsteel.com/powder-coating/"),
-        ("NCC 粉なのに塗料？", "https://ncc-3clab.com/resolution/painting/2461/"),
-        ("NCC 塗着効率とは", "https://ncc-nice.com/ncc-coating/knowledge/basics/coatingefficiency/"),
-        ("モノタロウ 粉体塗料解説",
-         "https://www.monotaro.com/note/readingseries/tosouqa/0416/"),
-        ("e-Gov 危険物の規制に関する政令", "https://laws.e-gov.go.jp/law/334CO0000000306"),
-        ("三協化学 消防法と有機溶剤・指定数量", "https://www.sankyo-chem.com/news/post-689/"),
-        ("化研テック 指定数量とは",
-         "https://www.kaken-tech.co.jp/trouble/%E6%8C%87%E5%AE%9A%E6%95%B0%E9%87%8F/"),
-        ("e-reverse.com 廃塗料の廃棄解説", "https://www.e-reverse.com/blog/law067/"),
-        ("丸商 シンナーの廃棄物処理",
-         "https://marusho-eco.jp/column/how_to_dispose_of_thinner_waste/"),
-        ("ネクストリー 溶剤回収装置事例", "https://nextry.jp/340/"),
-        ("コスモエンジニアリング パイプライニング",
-         "https://www.cosmoeng.co.jp/service/ctg05/piping/pipelining.html"),
-        ("環境省 廃棄物処理に関する統計",
-         "https://www.env.go.jp/recycle/waste/wastetoukei_index.html"),
-        ("経産省 PRTR 塗料に係る排出量",
-         "https://www.meti.go.jp/policy/chemical_management/law/prtr/r4kohyo/05todokedegaiyou/syousai/5.pdf"),
-    ]
-    for i, (title, url) in enumerate(sources, start=5):
-        write_cell(ws, i, 2, i - 4, font=FONT_BODY, align=ALIGN_CENTER)
-        write_cell(ws, i, 3, title, font=FONT_BODY, align=ALIGN_LEFT)
-        c = write_cell(ws, i, 4, url, font=FONT_BODY, align=ALIGN_LEFT)
-        c.hyperlink = url
-        c.font = Font(name="Yu Gothic", size=9, color="0563C1", underline="single")
-        ws.row_dimensions[i].height = 22
+    # カテゴリごとに色分け
+    cat_fills = {
+        "原材料":         PatternFill("solid", fgColor="DDEBF7"),
+        "製造プロセス":   PatternFill("solid", fgColor="E2EFDA"),
+        "製品":           PatternFill("solid", fgColor="FFF2CC"),
+        "品質":           PatternFill("solid", fgColor="FCE4D6"),
+        "物流・容器":     PatternFill("solid", fgColor="EDEDED"),
+        "規制・安全":     PatternFill("solid", fgColor="F8CBAD"),
+        "環境・省エネ":   PatternFill("solid", fgColor="C6E0B4"),
+    }
+
+    for i, row in enumerate(GLOSSARY, start=5):
+        cat, term, yomi, eng, desc = row
+        fill = cat_fills.get(cat, None)
+        write_cell(ws, i, 2, i - 4, font=FONT_BODY, align=ALIGN_CENTER, fill=fill)
+        write_cell(ws, i, 3, cat, font=FONT_BODY, align=ALIGN_CENTER, fill=fill)
+        write_cell(ws, i, 4, term,
+                   font=Font(name="Yu Gothic", size=10, bold=True), align=ALIGN_LEFT)
+        write_cell(ws, i, 5, yomi, font=FONT_BODY, align=ALIGN_LEFT)
+        write_cell(ws, i, 6, eng, font=Font(name="Yu Gothic", size=9, italic=True),
+                   align=ALIGN_LEFT)
+        write_cell(ws, i, 7, desc, font=FONT_BODY, align=ALIGN_WRAP)
+        ws.row_dimensions[i].height = 38
+
+    ws.freeze_panes = "B5"
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+
+
+# ────────────────────────────────────────────────────────────────────
+# 典拠 (CITATIONS): 主張 → 根拠 のマッピング
+# ────────────────────────────────────────────────────────────────────
+
+CITATIONS = [
+    # (引用箇所, 主張・記述内容, 典拠区分, 出典名, URL)
+
+    # === ①製品タイプ一覧 ===
+    ("①製品タイプ一覧",
+     "塗料は溶剤系・水性・粉体・電着・UV 硬化に大別される",
+     "業界資料",
+     "JPMA (日本塗料工業会) 製品分類解説、モノタロウ「塗料の変遷 ─ 粉体塗料」",
+     "https://www.monotaro.com/note/readingseries/tosouqa/0416/"),
+    ("①製品タイプ一覧",
+     "溶剤系塗料は消防法第 4 類引火性液体に該当",
+     "法令",
+     "消防法 / 危険物の規制に関する政令 (e-Gov)",
+     "https://laws.e-gov.go.jp/law/334CO0000000306"),
+    ("①製品タイプ一覧",
+     "水性塗料は VOC 削減型として推奨されるが冬季の凍結対策と防腐剤添加が必要",
+     "業界資料",
+     "JPMA「低 VOC 塗料」自主表示制度、関東塗料工業組合 解説",
+     "https://kantoko.com/blog/2024/04/90578/"),
+    ("①製品タイプ一覧",
+     "粉体塗料は VOC ゼロで塗着効率ほぼ 100% (理論値)",
+     "業界資料",
+     "NCC「塗着効率とは」、NCC「粉なのに塗料？」、ヒバラコーポレーション 粉体塗装解説",
+     "https://ncc-nice.com/ncc-coating/knowledge/basics/coatingefficiency/"),
+    ("①製品タイプ一覧",
+     "電着塗料はカチオン (自動車車体下塗) / アニオン (電子部品) の 2 系統",
+     "業界資料",
+     "関西ペイント技術資料、自動車塗装業界一般解説",
+     "https://asset.kansai.co.jp/"),
+
+    # === ②製造フロー比較 ===
+    ("②製造フロー比較",
+     "液体塗料の標準フローは 前練 → 分散 → 調合 → 調色 → ろ過 → 検査 → 充填",
+     "業界資料",
+     "Mixing Tank「塗料製造の方法」、JCT Machinery Paint Manufacturing Process、SR 塗装ブログ「塗料をつくる」",
+     "https://www.mixing-tank.com/ja/blog/"),
+    ("②製造フロー比較",
+     "ミルベース工程は顔料分散、レットダウン工程は樹脂・溶剤追加と定義される",
+     "業界資料",
+     "色材協会誌 庫本「塗料における分散」J-Stage、Yahoo 知恵袋 業界回答",
+     "https://www.jstage.jst.go.jp/article/shikizai1937/78/4/78_191/_pdf/-char/ja"),
+    ("②製造フロー比較",
+     "粉体塗料は 配合 → 押出混練 → 冷却 → 粉砕 → 分級 のフロー",
+     "業界資料",
+     "ヒバラコーポレーション、日鉄防食、NCC、モノタロウ技術解説",
+     "https://kougyoutosou.com/technology/powder/"),
+
+    # === ③-1 溶剤系液体塗料 ===
+    ("③-1 溶剤系液体塗料",
+     "樹脂・顔料・溶剤・添加剤の代表的配合比 (樹脂 35〜45%、顔料 15〜25%、溶剤 15〜25%、添加剤 5〜15%)",
+     "業界資料",
+     "サンノプコ「顔料分散と分散剤」、関西ペイント R&D、業界教科書一般",
+     "https://www.sannopco.co.jp/feature/pigment-dispersion/"),
+    ("③-1 溶剤系液体塗料",
+     "ディスパー回転数 1,500〜3,000 rpm、ビーズ径 0.3〜2 mm",
+     "装置メーカー",
+     "アシザワ・ファインテック「ビーズミルで分散する」、淺田鉄工 製品情報",
+     "https://ashizawa.com/guidance/05.html"),
+    ("③-1 溶剤系液体塗料",
+     "分散・練肉工程は塗料製造で最大の電力消費工程",
+     "学術/装置メーカー",
+     "関西ペイント R&D「高度顔料分散システム」、色材協会誌 J-Stage",
+     "https://asset.kansai.co.jp/uploads/rd/paint_study/pdf/143/04.pdf"),
+    ("③-1 溶剤系液体塗料",
+     "充填容器は 1L / 4L / 14L / 16L / 20L (一斗缶) / 200L ドラム / IBC が一般的",
+     "業界資料",
+     "業界一般 (一斗缶 = 18L の規格、外壁塗装大百科 解説)",
+     "https://exterior-paint.net/%E4%B8%80%E6%96%97%E7%BC%B6%E3%81%A8%E3%81%AF%EF%BC%9F/"),
+    ("③-1 溶剤系液体塗料",
+     "廃シンナー (引火点 70℃未満の廃油) は特別管理産業廃棄物に該当",
+     "法令",
+     "廃棄物処理法、e-reverse.com「廃塗料の廃棄注意点」、丸商「シンナーの廃棄物処理」",
+     "https://www.e-reverse.com/blog/law067/"),
+    ("③-1 溶剤系液体塗料",
+     "廃シンナーの蒸留再生 (社内設置) で処理コストを 1/3 程度に削減可能",
+     "業者事例",
+     "株式会社ネクストリー「溶剤回収装置で実際にシンナーを再生してみました」",
+     "https://nextry.jp/340/"),
+    ("③-1 溶剤系液体塗料",
+     "釜内残・配管残のロス削減にピギング (配管内残液回収) が有効",
+     "業界資料/特許",
+     "コスモエンジニアリング パイプライニング、特許 JPH0940092A「配管内残液回収方法」",
+     "https://patents.google.com/patent/JPH0940092A/ja"),
+
+    # === ③-2 水性液体塗料 ===
+    ("③-2 水性液体塗料",
+     "水性塗料には防腐剤 (イソチアゾリン系等) の添加が必須",
+     "業界資料",
+     "三洋化成マガジン「水系塗料用分散剤・調色改良剤」、Lonza・Troy 製品資料",
+     "https://www.sanyo-chemical.co.jp/magazine/archives/1242"),
+    ("③-2 水性液体塗料",
+     "水性塗料の保管 pH は 8〜9 に維持 (アンモニア・AMP で調整)",
+     "業界資料",
+     "色材協会誌 解説テーマ「やさしい塗料物性」J-Stage",
+     "https://www.jstage.jst.go.jp/article/shikizai1937/67/6/67_393/_pdf"),
+    ("③-2 水性液体塗料",
+     "VOC の主要発生源は塗料製造ではなく塗装時 (顧客側) である",
+     "公的資料",
+     "環境省 VOC 排出インベントリ、JPMA「塗料からの VOC 排出実態推計のまとめ」、関東塗料工業組合 解説",
+     "https://www.toryo.or.jp/jp/book/voch2022.html"),
+
+    # === ③-3 粉体塗料 ===
+    ("③-3 粉体塗料",
+     "押出混練は二軸エクストルーダーで樹脂を 90〜120℃に加熱しながら混練",
+     "業界資料",
+     "ヒバラコーポレーション 粉体塗装解説、日鉄防食 粉体塗装ページ、ドナウ商事 押出機解説",
+     "https://www.donau.co.jp/cate-industrial/aboutextruder/"),
+    ("③-3 粉体塗料",
+     "粉体塗料の平均粒径は 20〜40 μm に分級",
+     "業界資料",
+     "NCC「粉なのに塗料？」、モノタロウ 粉体塗料解説",
+     "https://ncc-3clab.com/resolution/painting/2461/"),
+    ("③-3 粉体塗料",
+     "オーバースプレー粉は回収用ブースで再利用可能、理論塗着効率はほぼ 100%",
+     "業界資料",
+     "NCC「塗着効率とは」、ヒバラコーポレーション",
+     "https://ncc-nice.com/ncc-coating/knowledge/basics/coatingefficiency/"),
+
+    # === ③-4 電着塗料 ===
+    ("③-4 電着塗料",
+     "電着塗料はタンクローリーで自動車 OEM 塗装ラインに直送する VMI 運用が標準",
+     "業界一般",
+     "自動車塗装業界一般解説、塗料商業誌、関西ペイント技術資料",
+     "https://asset.kansai.co.jp/"),
+    ("③-4 電着塗料",
+     "電着塗料の固形分は 15〜25%、洗浄水中の塗料分は UF (限外ろ過) で回収・再利用",
+     "業界教科書",
+     "電着塗装業界教科書、自動車塗装ライン技術資料",
+     "(専門書: 電着塗装の理論と実際 等)"),
+
+    # === ③-5 UV 硬化塗料 ===
+    ("③-5 UV硬化塗料",
+     "UV 硬化塗料は光開始剤 (Irgacure 等) を含有し UV 照射で瞬時に硬化",
+     "メーカー",
+     "BASF Irgacure シリーズ製品データ、業界一般",
+     "https://www.basf.com/"),
+    ("③-5 UV硬化塗料",
+     "感光性のため遮光下 (黄色灯) で製造・遮光容器で保管が必要",
+     "業界一般",
+     "業界教科書、装置メーカー安全資料",
+     "(専門書: UV 硬化技術ハンドブック)"),
+
+    # === 共通: マテリアルバランス・規制 ===
+    ("全シート共通",
+     "10t バッチサイズ・歩留まり ≒ 97.5% は業界一般値の概算 (確定統計なし)",
+     "推計",
+     "化学・配合系製造業は装置内残留や微飛沫で 100% 歩留まりが成立しない (歩留まり業界解説)",
+     "https://www.smartmat.io/column/production_management/8198"),
+    ("全シート共通",
+     "塗料は消防法 第 4 類 (第 1〜3 石油類) として倍数管理される",
+     "法令",
+     "消防法、危険物の規制に関する政令、三協化学 解説、化研テック 解説",
+     "https://www.sankyo-chem.com/news/post-689/"),
+    ("全シート共通",
+     "原材料費は塗料原価の 60〜70%、TiO₂・樹脂が中核",
+     "業界資料",
+     "JPMA コーティング・ケア環境管理指標、業界 IR 一般",
+     "https://www.toryo.or.jp/jp/anzen/cc/03_feature.html"),
+    ("全シート共通",
+     "排ガス VOC 処理は RTO (蓄熱燃焼) / 活性炭吸着 / 触媒燃焼 / 冷却凝縮 の組合せ",
+     "業界資料",
+     "経産省 VOC 排出削減のための取組事例、KLV「VOC 規制の基本」",
+     "https://www.meti.go.jp/policy/voc/r1_jirei_2.pdf"),
+    ("全シート共通",
+     "PRTR で塗料関連物質の排出量が報告されている",
+     "公的資料",
+     "経産省 PRTR 制度 塗料に係る排出量",
+     "https://www.meti.go.jp/policy/chemical_management/law/prtr/r4kohyo/05todokedegaiyou/syousai/5.pdf"),
+]
+
+
+def make_citations_sheet(wb):
+    ws = wb.create_sheet("典拠")
+    setup_columns(ws, [3, 6, 22, 50, 14, 38, 38])
+
+    ws.merge_cells("B2:G2")
+    write_cell(ws, 2, 2, "典拠 (Excel 各シートの記述に対する根拠)",
+               font=FONT_TITLE, fill=FILL_TITLE, align=ALIGN_CENTER, border=BORDER_BOX)
+    ws.row_dimensions[2].height = 28
+
+    ws.merge_cells("B3:G3")
+    write_cell(ws, 3, 2,
+               "本シートは「主張 (記述内容) → 典拠 (根拠の情報源)」のマッピング。"
+               "区分は 法令 / 公的資料 / 業界資料 / 装置メーカー / 学術 / 業者事例 / 推計 等。",
+               font=Font(name="Yu Gothic", size=9, italic=True, color="555555"),
+               align=ALIGN_CENTER, border=None)
+    ws.row_dimensions[3].height = 20
+
+    headers = ["No.", "引用箇所", "主張・記述内容", "典拠区分", "出典名", "URL"]
+    for i, h in enumerate(headers, start=2):
+        write_cell(ws, 5, i, h, font=FONT_H, fill=FILL_HEADER_IN, align=ALIGN_CENTER)
+    ws.row_dimensions[5].height = 22
+
+    # 区分別の色分け
+    kind_fills = {
+        "法令":           PatternFill("solid", fgColor="FFE4E1"),
+        "公的資料":       PatternFill("solid", fgColor="FFF2CC"),
+        "業界資料":       PatternFill("solid", fgColor="DDEBF7"),
+        "装置メーカー":   PatternFill("solid", fgColor="E2EFDA"),
+        "学術":           PatternFill("solid", fgColor="F8CBAD"),
+        "学術/装置メーカー": PatternFill("solid", fgColor="F8CBAD"),
+        "業者事例":       PatternFill("solid", fgColor="EDEDED"),
+        "メーカー":       PatternFill("solid", fgColor="E2EFDA"),
+        "業界一般":       PatternFill("solid", fgColor="DDEBF7"),
+        "業界教科書":     PatternFill("solid", fgColor="DDEBF7"),
+        "業界資料/特許":  PatternFill("solid", fgColor="DDEBF7"),
+        "推計":           PatternFill("solid", fgColor="FCE4D6"),
+    }
+
+    for i, row in enumerate(CITATIONS, start=6):
+        loc, claim, kind, src, url = row
+        fill = kind_fills.get(kind, None)
+        write_cell(ws, i, 2, i - 5, font=FONT_BODY, align=ALIGN_CENTER)
+        write_cell(ws, i, 3, loc, font=Font(name="Yu Gothic", size=9, bold=True),
+                   align=ALIGN_LEFT)
+        write_cell(ws, i, 4, claim, font=FONT_BODY, align=ALIGN_WRAP)
+        write_cell(ws, i, 5, kind, font=FONT_BODY, align=ALIGN_CENTER, fill=fill)
+        write_cell(ws, i, 6, src, font=FONT_BODY, align=ALIGN_WRAP)
+        c = write_cell(ws, i, 7, url, font=FONT_BODY, align=ALIGN_LEFT)
+        if url.startswith("http"):
+            c.hyperlink = url
+            c.font = Font(name="Yu Gothic", size=9, color="0563C1", underline="single")
+        ws.row_dimensions[i].height = 50
 
     # 注記
-    note_row = 5 + len(sources) + 2
-    ws.merge_cells(start_row=note_row, start_column=2, end_row=note_row, end_column=4)
+    note_row = 6 + len(CITATIONS) + 2
+    ws.merge_cells(start_row=note_row, start_column=2, end_row=note_row, end_column=7)
     write_cell(ws, note_row, 2,
-               "注: 工程別の電力 (kWh/t)・歩留まり・廃棄物単価などの定量値は業界一般値の概算であり、"
-               "工場・製品種・年度で大きく変動。実プロジェクト適用時は対象工場の実測値および JPMA 公表値で上書き校正のこと。",
+               "注: 工程別の電力 (kWh/t)・歩留まり (%)・廃棄物単価などの定量値は業界一般値の概算であり、"
+               "工場・製品種・年度で大きく変動します。実プロジェクト適用時は対象工場の実測値および "
+               "JPMA コーティング・ケア環境管理指標等の公表値で校正してください。",
                font=Font(name="Yu Gothic", size=8, italic=True, color="555555"),
                align=ALIGN_WRAP, border=None)
-    ws.row_dimensions[note_row].height = 40
+    ws.row_dimensions[note_row].height = 45
+
+    ws.freeze_panes = "B6"
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -1010,7 +1391,8 @@ def main():
     make_flow_compare_sheet(wb)
     for i, pt in enumerate(PRODUCT_TYPES, start=1):
         make_inout_sheet(wb, pt["name"], i)
-    make_sources_sheet(wb)
+    make_glossary_sheet(wb)
+    make_citations_sheet(wb)
 
     wb.save(OUTPUT_PATH)
     print(f"OK: {OUTPUT_PATH}")
