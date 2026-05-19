@@ -76,7 +76,7 @@ def cell(ws, r, c, v, font=None, fill=None, align=None, border=BORDER_ALL):
 
 
 HEADERS = [
-    "No.", "カテゴリ", "企業名", "本社所在地", "上場区分",
+    "No.", "カテゴリ", "企業名", "過去契約有無", "本社所在地", "上場区分",
     "売上規模(連結)", "従業員数(概数)", "主要セグメント",
     "溶剤系", "水性", "粉体", "電着", "UV硬化",
     "主要工場(代表)", "Web", "IR/問合せ窓口",
@@ -84,6 +84,19 @@ HEADERS = [
     "優先度スコア", "推奨アプローチルート", "既存関係(想定)",
     "留意点・ハードル", "進捗ステータス", "次アクション", "メモ",
 ]
+
+# 過去契約有無 (取引明細CSV 2026/05/11 時点との突合結果)
+# 親会社のみ厳密マッチで、子会社ヒットは親会社には伝播させない
+PAST_CONTRACT = {
+    "関西ペイント": 1,
+    "ロックペイント": 4,
+    "ナトコ": 1,
+    "シンロイヒ": 1,
+    "大日精化工業": 1,
+    "サカタインクス": 4,
+    "トウペ": 1,
+    "日本ペイント・インダストリアルコーティングス": 3,
+}
 
 
 def C(cat, name, hq, listed, sales, emp, seg,
@@ -680,6 +693,9 @@ def make_cover_sheet(wb):
         "・本リストの企業情報 (売上・従業員数・セグメント・適合製品タイプ) は 公開情報ベースの初期案 (推定値を含む)。",
         "・実ヒアリング前に貴社の取引履歴・関係性で 「既存関係」「優先度スコア」「アプローチルート」 列を必ず上書き校正してください。",
         "・「公開情報充実度」列に \"(要確認)\" がある企業は、基本情報の出典再確認が必要です。",
+        "・「過去契約有無」列は kintone 取引明細 (2026/05/11 抽出) との突合結果。○ 印=過去契約あり。",
+        "  突合は親会社のみ厳密マッチ。日ペHDの取引があっても子会社5社には自動付与しない (逆も同様)。",
+        f"  ○ 印が付いた企業: 8社/{50}社 (関西ペイント, ロックペイント, ナトコ, シンロイヒ, 大日精化工業, サカタインクス, トウペ, 日本ペイント・インダストリアルコーティングス)",
         "・優先度スコアは 100 点満点。シート②に配点基準を記載。",
         "・売上・従業員等は推定含む。最新の有報・IR資料・帝国データバンク等で適宜上書きを推奨。",
         "・◎=主力 / ○=取扱 / △=限定 / -=無し  (5製品タイプ別)。",
@@ -699,6 +715,7 @@ def make_main_list_sheet(wb):
         4,   # No.
         14,  # カテゴリ
         32,  # 企業名
+        12,  # 過去契約有無 (新規)
         20,  # 本社所在地
         18,  # 上場区分
         20,  # 売上規模
@@ -744,36 +761,44 @@ def make_main_list_sheet(wb):
         cell(ws, ci, 2, comp["カテゴリ"], font=FONT_BODY, align=ALIGN_CENTER, fill=fill)
         cell(ws, ci, 3, comp["企業名"],
              font=Font(name="Yu Gothic", size=10, bold=True), align=ALIGN_LEFT)
-        cell(ws, ci, 4, comp["本社所在地"], font=FONT_BODY, align=ALIGN_LEFT)
-        cell(ws, ci, 5, comp["上場区分"], font=FONT_BODY, align=ALIGN_CENTER)
-        cell(ws, ci, 6, comp["売上規模(連結)"], font=FONT_BODY, align=ALIGN_LEFT)
-        cell(ws, ci, 7, comp["従業員数(概数)"], font=FONT_BODY, align=ALIGN_LEFT)
-        cell(ws, ci, 8, comp["主要セグメント"], font=FONT_BODY, align=ALIGN_WRAP)
+        # 4. 過去契約有無 (新規列)
+        name = comp["企業名"]
+        pc_n = PAST_CONTRACT.get(name, 0)
+        pc_cell = cell(ws, ci, 4, "○" if pc_n > 0 else "",
+                       font=Font(name="Yu Gothic", size=14, bold=True, color="C00000"),
+                       align=ALIGN_CENTER)
+        if pc_n > 0:
+            pc_cell.fill = PatternFill("solid", fgColor="C6EFCE")
+        cell(ws, ci, 5, comp["本社所在地"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 6, comp["上場区分"], font=FONT_BODY, align=ALIGN_CENTER)
+        cell(ws, ci, 7, comp["売上規模(連結)"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 8, comp["従業員数(概数)"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 9, comp["主要セグメント"], font=FONT_BODY, align=ALIGN_WRAP)
         for k_off, key in enumerate(["溶剤系", "水性", "粉体", "電着", "UV硬化"]):
             v = comp[key]
-            fcell = cell(ws, ci, 9 + k_off, v, font=FONT_H, align=ALIGN_CENTER)
+            fcell = cell(ws, ci, 10 + k_off, v, font=FONT_H, align=ALIGN_CENTER)
             if v == "◎":
                 fcell.fill = PatternFill("solid", fgColor="C6E0B4")
             elif v == "○":
                 fcell.fill = PatternFill("solid", fgColor="DDEBF7")
             elif v == "△":
                 fcell.fill = PatternFill("solid", fgColor="FFF2CC")
-        cell(ws, ci, 14, comp["主要工場(代表)"], font=FONT_BODY, align=ALIGN_WRAP)
-        c = cell(ws, ci, 15, comp["Web"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 15, comp["主要工場(代表)"], font=FONT_BODY, align=ALIGN_WRAP)
+        c = cell(ws, ci, 16, comp["Web"], font=FONT_BODY, align=ALIGN_LEFT)
         if comp["Web"].startswith("http"):
             c.hyperlink = comp["Web"]
             c.font = Font(name="Yu Gothic", size=9, color="0563C1", underline="single")
-        cell(ws, ci, 16, comp["IR/問合せ窓口"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 17, comp["IR/問合せ窓口"], font=FONT_BODY, align=ALIGN_LEFT)
         # 公開情報充実度: "(要確認)" を含む場合は強調
         info_v = comp["公開情報充実度"]
-        info_cell = cell(ws, ci, 17, info_v, font=FONT_BODY, align=ALIGN_CENTER)
+        info_cell = cell(ws, ci, 18, info_v, font=FONT_BODY, align=ALIGN_CENTER)
         if "要確認" in info_v:
             info_cell.fill = PatternFill("solid", fgColor="FFC7CE")
             info_cell.font = Font(name="Yu Gothic", size=9, bold=True, color="9C0006")
-        cell(ws, ci, 18, comp["ヒアリング推奨工程"], font=FONT_BODY, align=ALIGN_WRAP)
-        cell(ws, ci, 19, comp["確認したい定量項目"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 19, comp["ヒアリング推奨工程"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 20, comp["確認したい定量項目"], font=FONT_BODY, align=ALIGN_WRAP)
         score = comp["優先度スコア"]
-        sc = cell(ws, ci, 20, score, font=FONT_NUM, align=ALIGN_CENTER)
+        sc = cell(ws, ci, 21, score, font=FONT_NUM, align=ALIGN_CENTER)
         if score >= 85:
             sc.fill = PatternFill("solid", fgColor="C6EFCE")
         elif score >= 75:
@@ -782,16 +807,16 @@ def make_main_list_sheet(wb):
             sc.fill = PatternFill("solid", fgColor="FFC7CE")
         else:
             sc.fill = PatternFill("solid", fgColor="EDEDED")
-        cell(ws, ci, 21, comp["推奨アプローチルート"], font=FONT_BODY, align=ALIGN_WRAP)
-        cell(ws, ci, 22, comp["既存関係(想定)"], font=FONT_BODY, align=ALIGN_WRAP)
-        cell(ws, ci, 23, comp["留意点・ハードル"], font=FONT_BODY, align=ALIGN_WRAP)
-        cell(ws, ci, 24, comp["進捗ステータス"], font=FONT_BODY, align=ALIGN_CENTER)
-        cell(ws, ci, 25, comp["次アクション"], font=FONT_BODY, align=ALIGN_LEFT)
-        cell(ws, ci, 26, comp["メモ"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 22, comp["推奨アプローチルート"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 23, comp["既存関係(想定)"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 24, comp["留意点・ハードル"], font=FONT_BODY, align=ALIGN_WRAP)
+        cell(ws, ci, 25, comp["進捗ステータス"], font=FONT_BODY, align=ALIGN_CENTER)
+        cell(ws, ci, 26, comp["次アクション"], font=FONT_BODY, align=ALIGN_LEFT)
+        cell(ws, ci, 27, comp["メモ"], font=FONT_BODY, align=ALIGN_WRAP)
         ws.row_dimensions[ci].height = 68
 
     ws.auto_filter.ref = f"A4:{get_column_letter(last_col)}{4 + len(COMPANIES)}"
-    ws.freeze_panes = "D5"
+    ws.freeze_panes = "E5"
 
     ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
     ws.page_setup.fitToWidth = 1
